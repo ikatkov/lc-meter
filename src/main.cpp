@@ -53,7 +53,7 @@ void displayCalibrationScreen()
 
         display.setDrawColor(0);
         display.drawRBox(36, 4, 56, 46, 3);
-        display.setFont(u8g2_font_5x8_mr);
+        display.setFont(u8g2_font_7x13_mr);
         display.drawStr(37, 59, "CALIBRATION");
 
         display.setDrawColor(1);
