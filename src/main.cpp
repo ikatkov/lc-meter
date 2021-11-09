@@ -6,15 +6,21 @@
 //internal states
 static const byte C_MEASURING_STATE = 1;
 static const byte L_MEASURING_STATE = 2;
+static const byte C_SHORT_CIRCUIT_STATE = 3;
+static const byte L_OPEN_CIRCUIT_STATE = 4;
 
 byte internalState;
 
 //this correction is specific to the arduino board instance, use a lab tool to measure
-static const float XTAL_FREQ_COMPENSATION = 0.9992275218;
+//static const float XTAL_FREQ_COMPENSATION = 0.9992275218;
+   static const float XTAL_FREQ_COMPENSATION = 0.99920589292;
 
 const unsigned long MEASURE_INTERVAL = 1000;
-const float FOUR_PI_SQRD = 39.4784176044; //(2Pi)^2
-static const float C2_VALUE = 1180E-12;
+static const float FOUR_PI_SQRD = 39.4784176044; //(2Pi)^2
+static const float C2_VALUE = 1210.7E-12;
+
+// measured C1 value = 839.1pF
+// measured L1 value = 95.86uH
 
 static const byte MODE_BUTTON_PIN = 2;
 static const byte CAL_BUTTON_PIN = 3;
@@ -54,7 +60,7 @@ void displayCalibrationScreen()
         display.setDrawColor(0);
         display.drawRBox(36, 4, 56, 46, 3);
         display.setFont(u8g2_font_7x13_mr);
-        display.drawStr(37, 59, "CALIBRATION");
+        display.drawStr(25, 60, "CALIBRATION");
 
         display.setDrawColor(1);
         display.drawDisc(64, 26, 16, U8G2_DRAW_ALL);
@@ -75,37 +81,47 @@ void displayCalibrationScreen()
 
 void formatCapacitorValue(float value, char *buffer)
 {
+    Serial.print(F("formatCapacitorValue - "));
+    Serial.print(value);
+    Serial.print(" - ");
     if (value < 1E-12)
     {
-        sprintf(buffer, "........");
+        Serial.print(F("0.0 - "));
+        strcpy(buffer, "  0.0  ");
     }
     else if (value < 1E-9)
     {
+        Serial.print(F("pico - "));
         //pico
-        sprintf(buffer, "%.2fpF", value * 1E12);
+        snprintf(buffer, 10, "%.2fpF", value * 1E12);
     }
     else if (value < 1E-6)
     {
+        Serial.print(F("nano - "));
         //nano
-        sprintf(buffer, "%.2fnF", value * 1E9);
+        snprintf(buffer, 10, "%.2fnF", value * 1E9);
     }
     else if (value < 1E-3)
     {
+        Serial.print(F("micro - "));
         //micro
-        sprintf(buffer, "%.2fuF", value * 1E6);
+        // sprintf(buffer, "%.2fuF", value * 1E6);
     }
     else
     {
-        sprintf(buffer, "XXX.XX");
+        Serial.print(F("xxx - "));
+        strcpy(buffer, "X.X");
     }
+    Serial.println("");
 }
 
-void formatInductorValue(float value, char *buffer)
+void formatInductorValue(float value, char buffer[])
 {
-    if (value < 1E-9)
+    //Serial.print(F("formatInductorValue "));
+    if (value == 0 || value < 1E-9)
     {
         //pico
-        sprintf(buffer, "........");
+        sprintf(buffer, "0.0");
     }
     else if (value < 1E-6)
     {
@@ -126,21 +142,24 @@ void formatInductorValue(float value, char *buffer)
     {
         sprintf(buffer, "XXX.XX");
     }
+    //Serial.println(buffer);
 }
 
 void formatFrequency(float value, char *buffer)
 {
-    sprintf(buffer, "%.3fkHz", (double)value / 1000);
+    sprintf(buffer, "%.3f kHz", (double)value / 1000);
 }
 
 void drawInternalValuesDisplay()
 {
+    Serial.println(F("drawInternalValuesDisplay"));
+    char buffer[10];
     display.firstPage();
     do
     {
         display.setDrawColor(1);
         display.setFont(u8g2_font_7x13_mr);
-        char buffer[10];
+
         formatFrequency(F1, buffer);
         display.drawStr(30, 16, buffer);
 
@@ -160,55 +179,55 @@ void drawInternalValuesDisplay()
         //internal values
         display.setFont(u8g2_font_7x13_mr);
         formatCapacitorValue(C1, buffer);
-        display.drawStr(14, 60, buffer);
+        display.drawStr(5, 60, buffer);
 
         formatInductorValue(L1, buffer);
-        display.drawStr(72, 60, buffer);
+        display.drawStr(100, 60, buffer);
     } while (display.nextPage());
+    Serial.println(F("drawInternalValuesDisplay-exit"));
 }
 
 void drawScreen()
 {
-    display.clearDisplay();
-    char buffer[10];
-    if (state == C_MEASURING_STATE)
+    Serial.println(F("drawScreen"));
+    float value;
+    float prevValue;
+    display.firstPage();
+    do
     {
-        display.firstPage();
-        do
+        char buffer[10];
+        display.setDrawColor(1);
+        if (state == C_SHORT_CIRCUIT_STATE)
         {
+            Serial.println(F("state - C_SHORT_CIRCUIT_STATE"));
+            sprintf(buffer, "SHORT");
+            //display.drawStr(5, 55, "CIRCUIT");
+        }
+        else if (state == L_OPEN_CIRCUIT_STATE)
+        {
+            Serial.println(F("state - L_OPEN_CIRCUIT_STATE"));
+            sprintf(buffer, "OPEN");
+        }
+        else if (state == C_MEASURING_STATE)
+        {
+            Serial.println(F("state - C"));
+            value = C3;
+            prevValue = C3_prev;
+            formatCapacitorValue(C3, buffer);
+
             display.setDrawColor(1);
             //capacitor symbol
             display.drawBox(27, 45, 13, 2); // --
             display.drawBox(49, 45, 13, 2); // --
             display.drawBox(40, 37, 2, 18); // |
             display.drawBox(47, 37, 2, 18); // |
-
-            //top value
-            display.setFont(u8g2_font_profont29_mr);
-            formatCapacitorValue(C3, buffer);
-            display.drawStr(0, 25, buffer);
-
-            //formatFrequency(F3, buffer);
-            if (C3_prev != 0)
-            {
-                display.setFont(u8g2_font_7x13_mr);
-                sprintf(buffer, "%+.3f%%", (double)((C3 - C3_prev) / C3_prev * 100));
-                display.drawStr(75, 60, buffer);
-            }
-            //draw progress dots
-            display.setDrawColor(1);
-            for (int x = 0; x < measurmentCounter; x++)
-            {
-                display.drawDisc(10 + x * 10, 60, 3, U8G2_DRAW_ALL);
-            }
-
-        } while (display.nextPage());
-    }
-    else if (state == L_MEASURING_STATE)
-    {
-        display.firstPage();
-        do
+        }
+        else if (state == L_MEASURING_STATE)
         {
+            Serial.println(F("state - L"));
+            value = L3;
+            prevValue = L3_prev;
+            formatInductorValue(L3, buffer);
             display.setDrawColor(1);
             //inductor symbol
             display.drawBox(7, 45, 12, 2); // --
@@ -216,32 +235,37 @@ void drawScreen()
             display.drawCircle(30, 46, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
             display.drawCircle(38, 46, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
             display.drawBox(43, 45, 12, 2); // --
-
-            //top value
-            display.setFont(u8g2_font_profont29_mr);
-            formatInductorValue(L3, buffer);
-            display.drawStr(0, 25, buffer);
-
-            if (L3_prev != 0)
+        }
+        if (state == C_MEASURING_STATE || state == L_MEASURING_STATE)
+        {
+            Serial.println(F("state - C||L"));
+            //draw delta
+            if (prevValue != 0 && value > 1E-12)
             {
                 display.setFont(u8g2_font_7x13_mr);
-                sprintf(buffer, "%+.3f%%", (double)((L3 - L3_prev) / L3_prev * 100));
-                display.drawStr(75, 60, buffer);
+                sprintf(buffer, "%+.3f%%", (double)((value - prevValue) / prevValue * 100));
+                display.drawStr(75, 55, buffer);
             }
+        }
+        //top value
+        display.setDrawColor(1);
+        display.setFont(u8g2_font_profont29_mr);
+        display.drawStr(0, 25, buffer);
 
-            //draw progress dots
-            display.setDrawColor(1);
-            for (int x = 0; x < measurmentCounter; x++)
-            {
-                display.drawDisc(10 + x * 10, 60, 3, U8G2_DRAW_ALL);
-            }
-
-        } while (display.nextPage());
-    }
+        //draw progress dots
+        display.setDrawColor(0);
+        display.drawBox(0, 60, 128, 64);
+        display.setDrawColor(1);
+        for (int i = 0; i < measurmentCounter; i++)
+        {
+            display.drawLine(10 + i * 10, 60, 10 + i * 10, 64);
+        }
+    } while (display.nextPage());
 }
 
 unsigned long getFrequency()
 {
+    Serial.println(F("getFrequency"));
     FreqCount.begin(250);
     while (!FreqCount.available())
     {
@@ -258,6 +282,7 @@ unsigned long getFrequency()
 void calibrate()
 {
     Serial.println(F("calibrate"));
+    measurmentCounter = 0;
     displayCalibrationScreen();
     digitalWrite(CAL_RELAY_PIN, LOW);
     delay(100);
@@ -281,6 +306,11 @@ void calibrate()
     L1 = 1 / (F1 * F1 * C1 * FOUR_PI_SQRD);
     Serial.print(F("Internal L1: "));
     Serial.println(L1 * 1E6);
+
+    C3 = 0;
+    C3_prev = 0;
+    L3 = 0;
+    L3_prev = 0;
 }
 
 void measureC()
@@ -289,6 +319,24 @@ void measureC()
     F3 = getFrequency();
     Serial.print(F("Freq3 (Hz): "));
     Serial.println(F3);
+    if (F3 > F1)
+    {
+        Serial.println(F("leads are probably shorted or the cap is shorted"));
+        F3 = F1;
+        if (state != C_SHORT_CIRCUIT_STATE)
+        {
+            display.clearDisplay();
+        }
+        state = C_SHORT_CIRCUIT_STATE;
+    }
+    else
+    {
+        if (state != C_MEASURING_STATE)
+        {
+            display.clearDisplay();
+        }
+        state = C_MEASURING_STATE;
+    }
 
     //calculate C3
     float oldC3 = C3;
@@ -299,9 +347,9 @@ void measureC()
         C3_prev = oldC3;
     }
     Serial.print(F("C3: "));
-    char buffer[10];
-    formatCapacitorValue(C3, buffer);
-    Serial.println(buffer);
+    //char buffer[10];
+    //formatCapacitorValue(C3, buffer);
+    Serial.println(C3);
 }
 
 void measureL()
@@ -310,7 +358,16 @@ void measureL()
     F3 = getFrequency();
     Serial.print(F("Freq3 (Hz): "));
     Serial.println(F3);
-
+    if (F3 > F1)
+    {
+        Serial.println(F("leads are probably open or the inductor is open circuit"));
+        F3 = F1;
+        state = L_OPEN_CIRCUIT_STATE;
+    }
+    else
+    {
+        state = L_MEASURING_STATE;
+    }
     //calculate L3
     float oldL3 = L3;
     L3 = L1 * ((F1 * F1) / (F3 * F3) - 1); //calculate L3 in H
@@ -320,9 +377,10 @@ void measureL()
         L3_prev = oldL3;
     }
     Serial.print(F("L3: "));
-    char buffer[10];
-    formatInductorValue(L3, buffer);
-    Serial.println(buffer);
+    Serial.println(L3);
+    // char buffer[10];
+    // formatInductorValue(L3, buffer);
+    //Serial.println(buffer);
 }
 
 void setup()
@@ -354,20 +412,21 @@ void loop()
     modeButton.read();
     calButton.read();
 
-    if (millis() - lastMeasureTime > MEASURE_INTERVAL)
-    {
-        measurmentCounter = measurmentCounter + 1 % 10;
-        if (state == C_MEASURING_STATE)
-        {
-            measureC();
-        }
-        else if (state == L_MEASURING_STATE)
-        {
-            measureL();
-        }
-        drawScreen();
-        lastMeasureTime = millis();
-    }
+    // if (millis() - lastMeasureTime > MEASURE_INTERVAL)
+    // {
+    //     Serial.println(F("measuring somthing"));
+    //     measurmentCounter = (measurmentCounter + 1) % 12;
+    //     if (state == C_MEASURING_STATE || state == C_SHORT_CIRCUIT_STATE)
+    //     {
+    //         measureC();
+    //     }
+    //     else if (state == L_MEASURING_STATE || state == L_OPEN_CIRCUIT_STATE)
+    //     {
+    //         measureL();
+    //     }
+    //     drawScreen();
+    //     lastMeasureTime = millis();
+    // }
 }
 
 void onModeButtonPressed()
@@ -380,7 +439,7 @@ void onModeButtonPressed()
         state = L_MEASURING_STATE;
         calibrate();
         drawInternalValuesDisplay();
-        drawScreen();
+        delay(1000);
     }
     else if (state == L_MEASURING_STATE)
     {
@@ -389,8 +448,9 @@ void onModeButtonPressed()
         state = C_MEASURING_STATE;
         calibrate();
         drawInternalValuesDisplay();
-        drawScreen();
+        delay(1000);
     }
+    Serial.println(F("onModeButtonPressed-exit"));
 }
 
 //also works as menu-up
@@ -398,4 +458,7 @@ void onCalButtonPressed()
 {
     Serial.println(F("onCalButtonPressed"));
     calibrate();
+    drawInternalValuesDisplay();
+    delay(200);
+    Serial.println(F("onCalButtonPressed-exit"));
 }
