@@ -81,6 +81,22 @@ void displayCalibrationScreen()
     } while (display.nextPage());
 }
 
+void drawCalibraionErrorDisplay(){
+    display.clearDisplay();
+
+    display.firstPage();
+    do
+    {
+        display.setDrawColor(1);
+
+        display.setFont(u8g2_font_7x13_mr);
+        display.drawStr(25, 20, "CALIBRATION");   
+        display.setFont(u8g2_font_profont29_mr);
+        display.drawStr(25, 60, "ERROR");
+     
+    } while (display.nextPage());
+}
+
 void formatCapacitorValue(float value, char *buffer, byte len)
 {
     if (value < 1E-12)
@@ -139,7 +155,7 @@ void formatInductorValue(float value, char *buffer, byte len)
 
 void formatFrequency(float value, char *buffer, byte len)
 {
-    snprintf(buffer, len, "%d kHz", round(value / 1000));
+    snprintf(buffer, len, "%.3f kHz", (double)value / 1000);
 }
 
 void drawInternalValuesDisplay()
@@ -175,46 +191,14 @@ void drawInternalValuesDisplay()
         display.drawStr(5, 64, bufferC);
         display.drawStr(80, 64, bufferL);
     } while (display.nextPage());
-    Serial.println(F("drawInternalValuesDisplay-exit"));
-}
-
-void drawLScreen()
-{
-    Serial.println(F("drawLScreen"));
-    float value;
-    float prevValue;
-    char measurement[10];
-    value = L3;
-    prevValue = L3_prev;
-    formatInductorValue(L3, measurement, 10);
-
-    //top value
-    display.setDrawColor(1);
-    display.setFont(u8g2_font_profont29_mr);
-    display.drawStr(0, 25, measurement);
-
-    //inductor symbol
-    display.drawBox(7, 45, 12, 2); // --
-    display.drawCircle(22, 46, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-    display.drawCircle(30, 46, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-    display.drawCircle(38, 46, 4, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_UPPER_RIGHT);
-    display.drawBox(43, 45, 12, 2); // --
-
-    //draw delta
-    if (prevValue != 0 && value > 1E-12)
-    {
-        display.setFont(u8g2_font_7x13_mr);
-        sprintf(measurement, "%+.3f%%", (double)((value - prevValue) / prevValue * 100));
-        display.drawStr(75, 55, measurement);
-    }
 }
 
 void drawScreen()
 {
     Serial.println(F("drawScreen"));
     char measurementBuffer[10];
-    char freqBuffer[10];
-    formatFrequency(F3, freqBuffer, 10);
+    char freqBuffer[12];
+    formatFrequency(F3, freqBuffer, 12);
 
     display.firstPage();
     do
@@ -237,7 +221,7 @@ void drawScreen()
                 strncpy(measurementBuffer, "  ----  ", 10);
             }
 
-            display.drawStr(90, 20, "Cs");
+            display.drawStr(100, 20, "Cs");
         }
         else if (state == L_MEASURING_STATE)
         {
@@ -252,7 +236,7 @@ void drawScreen()
                 strncpy(measurementBuffer, "  ----  ", 10);
             }
 
-            display.drawStr(90, 20, "Ls");
+            display.drawStr(100, 20, "Ls");
         }
         else if (state == C_SHORT_CIRCUIT_STATE)
         {
@@ -428,8 +412,20 @@ void measureC()
     //calculate C3
     C3_prev = C3;
     C3 = C1 * ((F1 * F1) / (F3 * F3) - 1); //calculate C3 in F
+
+    Serial.print(F("F1: "));
+    Serial.println(F1);
+    Serial.print(F("F3: "));
+    Serial.println(F3);
+
+    char buffer[10];
+    Serial.print(F("C1: "));
+    formatCapacitorValue(C1, buffer, 10);
+    Serial.println(buffer);
+
     Serial.print(F("C3: "));
-    Serial.println(C3);
+    formatCapacitorValue(C3, buffer, 10);
+    Serial.println(buffer);
 }
 
 void measureL()
@@ -459,8 +455,19 @@ void measureL()
         L3 = L1 * ((F1 * F1) / (F3 * F3) - 1); //calculate L3 in H
     }
 
+    Serial.print(F("F1: "));
+    Serial.println(F1);
+    Serial.print(F("F3: "));
+    Serial.println(F3);
+
+    char buffer[10];
+    Serial.print(F("L1: "));
+    formatInductorValue(L1, buffer, 10);
+    Serial.println(buffer);
+
     Serial.print(F("L3: "));
-    Serial.println(L3);
+    formatInductorValue(L3, buffer, 10);
+    Serial.println(buffer);
 }
 
 void setup()
@@ -489,7 +496,8 @@ void setup()
     }
     else
     {
-        drawScreen();
+        drawCalibraionErrorDisplay();
+        delay(3000); 
     }
 }
 
@@ -561,7 +569,9 @@ void onCalButtonPressed()
     if (result)
     {
         drawInternalValuesDisplay();
-        delay(200);
+        delay(1000);
+    }else{
+        drawCalibraionErrorDisplay();
+        delay(3000); 
     }
-    Serial.println(F("onCalButtonPressed-exit"));
 }
