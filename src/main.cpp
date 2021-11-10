@@ -81,7 +81,8 @@ void displayCalibrationScreen()
     } while (display.nextPage());
 }
 
-void drawCalibraionErrorDisplay(){
+void drawCalibraionErrorDisplay()
+{
     display.clearDisplay();
 
     display.firstPage();
@@ -90,10 +91,10 @@ void drawCalibraionErrorDisplay(){
         display.setDrawColor(1);
 
         display.setFont(u8g2_font_7x13_mr);
-        display.drawStr(25, 20, "CALIBRATION");   
+        display.drawStr(25, 20, "CALIBRATION");
         display.setFont(u8g2_font_profont29_mr);
         display.drawStr(25, 60, "ERROR");
-     
+
     } while (display.nextPage());
 }
 
@@ -497,7 +498,7 @@ void setup()
     else
     {
         drawCalibraionErrorDisplay();
-        delay(3000); 
+        delay(3000);
     }
 }
 
@@ -537,6 +538,11 @@ void onModeButtonPressed()
             delay(1000);
             state = L_MEASURING_STATE;
         }
+        else
+        {
+            drawCalibraionErrorDisplay();
+            delay(3000);
+        }
     }
     else if (state == L_MEASURING_STATE || state == L_OPEN_CIRCUIT_STATE)
     {
@@ -549,8 +555,12 @@ void onModeButtonPressed()
             delay(1000);
             state = C_MEASURING_STATE;
         }
+        else
+        {
+            drawCalibraionErrorDisplay();
+            delay(3000);
+        }
     }
-    Serial.println(F("onModeButtonPressed-exit"));
 }
 
 //also works as menu-up
@@ -570,8 +580,10 @@ void onCalButtonPressed()
     {
         drawInternalValuesDisplay();
         delay(1000);
-    }else{
+    }
+    else
+    {
         drawCalibraionErrorDisplay();
-        delay(3000); 
+        delay(3000);
     }
 }
